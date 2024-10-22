@@ -1,0 +1,1 @@
+You have installed kube-manifest-backup chart version {{ .Chart.Version }}

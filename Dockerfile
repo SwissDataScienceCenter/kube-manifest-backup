@@ -10,6 +10,7 @@ RUN echo "Building for $TARGETPLATFORM" && \
     go build -o /out/kube-manifest-backup .
 
 FROM alpine:3.17.2 AS bin
+WORKDIR /app
 COPY --from=build /out/kube-manifest-backup /usr/local/bin/
 
 ENV KMB_USE_PRIVATE_GPG_KEY="false"
@@ -23,7 +24,7 @@ ENV KMB_IN_CLUSTER="false"
 ENV KMB_BACKUP_RESOURCES_YAML_FILE="resources.yaml"
 ENV KMB_S3_CONFIG_FILE="s3-config.json"
 ENV KMB_S3_BUCKET_NAME="kube-manifest-backup"
-ENV KMB_S3_BACKUP_DIR="target-directory"
+ENV KMB_S3_BACKUP_DIR="backups"
 
 EXPOSE 2112/tcp
 
