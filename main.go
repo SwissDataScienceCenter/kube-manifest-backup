@@ -1,4 +1,4 @@
-// Main is the only package for Kube-Manifest-Backup
+// Main is the only package for kube-manifest-backup
 package main
 
 import (
@@ -71,6 +71,7 @@ type s3Config struct {
 }
 
 func main() {
+	// Parse command line flags
 	usePrivateGPGKey := flag.Bool("use-private-gpg-key", false, "use a private GPG key to encrypt backups")
 	privateKeySecretName := flag.String("private-key-secret-name", "sops-gpg", "name of the secret containing the private key")
 	privateKeySecretNamespace := flag.String("private-key-secret-namespace", "flux-system", "namespace of the secret containing the private key")
@@ -116,11 +117,6 @@ func main() {
 		}
 	}
 
-	var s3configuration s3Config
-	s3configuration.ConfigFile = *s3ConfigFile
-	s3configuration.BucketName = *s3BucketName
-	s3configuration.BackupDir = *s3BackupDir
-
 	// Initialise dynamicClient
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
@@ -147,12 +143,18 @@ func main() {
 		}
 	}
 
+	var s3configuration s3Config
+	s3configuration.ConfigFile = *s3ConfigFile
+	s3configuration.BucketName = *s3BucketName
+	s3configuration.BackupDir = *s3BackupDir
+
 	// If singleBackup flag is set, run a single backup and exit
 	if *runOnce {
 		backupResources(dynamicClient, *localBackupDir, nil, privateKey, *backupResourcesYamlFile, s3configuration)
 		os.Exit(0)
 	}
 
+	// Else, initialise Prometheus metrics and schedule backups
 	kmbMetrics := initialiseMetrics()
 
 	scheduleBackups(*backupSchedule, dynamicClient, *localBackupDir, &kmbMetrics, privateKey, *backupResourcesYamlFile, s3configuration)
@@ -162,9 +164,21 @@ func main() {
 }
 
 func backupResources(dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string, s3Configuration s3Config) {
+	resources := processResources(dynamicClient, localBackupDir, kmbMetrics, privateKey, backupResourcesYamlFile)
+	cleanupOldBackupDirectories(localBackupDir, resources)
+
+	ctx := context.Background()
+	configfile.Install()
+
+	s3config := loadS3Config(s3Configuration.ConfigFile)
+	fdest, fsrc := setupFilesystems(ctx, localBackupDir, s3Configuration, s3config)
+
+	performSync(ctx, fdest, fsrc)
+}
+
+func processResources(dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string) []resourceinfo {
 	resources := readResourcesFromYAML(backupResourcesYamlFile)
 
-	// Iterate through the resources and call getResourceYAML
 	for _, resource := range resources {
 		gvr := schema.GroupVersionResource{
 			Group:    resource.Group,
@@ -174,24 +188,14 @@ func backupResources(dynamicClient dynamic.Interface, localBackupDir string, kmb
 		getResourceYAML(dynamicClient, resource.Namespace, resource.Resource, gvr, localBackupDir, kmbMetrics, resource.Secret, privateKey)
 	}
 
-	cleanupOldBackupDirectories(localBackupDir, resources)
+	return resources
+}
 
-	// Initialise context
-	ctx := context.Background()
-
-	configfile.Install()
-
-	// Setup rclone: load configurations and create a new fs
-	ci := fs.GetConfig(nil)
-	ci.LogLevel = fs.LogLevelInfo
-
-	m := configmap.Simple{}
-
-	// Read the S3 configuration file
-	file, err := os.Open(s3Configuration.ConfigFile)
+func loadS3Config(configFile string) map[string]string {
+	file, err := os.Open(configFile)
 	if err != nil {
 		log.Println("Error opening S3 config file:", err)
-		return
+		return nil
 	}
 	defer file.Close()
 
@@ -200,13 +204,16 @@ func backupResources(dynamicClient dynamic.Interface, localBackupDir string, kmb
 	var s3config map[string]string
 	encodingjson.Unmarshal(byteValue, &s3config)
 
-	// Set the values from the config file to m
+	return s3config
+}
+
+func setupFilesystems(ctx context.Context, localBackupDir string, s3Configuration s3Config, s3config map[string]string) (fs.Fs, fs.Fs) {
+	m := configmap.Simple{}
 	for key, value := range s3config {
 		m.Set(key, value)
 	}
 
 	l := configmap.Simple{}
-
 	l.Set("type", "local")
 
 	fdest, err := s3.NewFs(ctx, "myS3", s3Configuration.BucketName+"/"+s3Configuration.BackupDir+"/", m)
@@ -214,15 +221,17 @@ func backupResources(dynamicClient dynamic.Interface, localBackupDir string, kmb
 		log.Fatalf("Failed to create filesystem for destination using alias: %v", err)
 	}
 
-	// Local source directory
 	log.Println("Creating local filesystem for source")
 	fsrc, err := local.NewFs(ctx, "myLocal", localBackupDir+"/", l)
 	if err != nil {
 		log.Fatalf("Failed to create filesystem for source: %v", err)
 	}
 
-	// Perform the sync operation
-	err = sync.Sync(ctx, fdest, fsrc, true)
+	return fdest, fsrc
+}
+
+func performSync(ctx context.Context, fdest fs.Fs, fsrc fs.Fs) {
+	err := sync.Sync(ctx, fdest, fsrc, true)
 	if err != nil {
 		log.Fatalf("Failed to sync: %v", err)
 	}

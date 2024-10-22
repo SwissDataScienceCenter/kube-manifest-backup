@@ -1,10 +1,13 @@
-# Kube-Manifest-Backup
+# kube-manifest-backup
 
-Kube-Manifest-Backup is a Go-based tool designed to back up Kubernetes YAML manifest files to an S3 bucket.
+kube-manifest-backup is a Go-based tool designed to back up Kubernetes YAML manifest files to an S3 bucket.
 
 ## Features
 
-- Backup Kubernetes YAML manifest files.
+- Backup Kubernetes YAML manifest files to an S3 bucket.
+- Cron-based scheduling.
+- Support for backing up secrets, encrypted with an in-cluster GPG key.
+- Export Prometheus metrics
 
 ## Installation
 
