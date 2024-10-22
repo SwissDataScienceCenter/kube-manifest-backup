@@ -7,30 +7,22 @@ on:
 
 jobs:
   build:
-    name: Build and Release on ${{ matrix.os }} for ${{ matrix.arch }}
-    runs-on: ${{ matrix.os }}
+    name: Build for ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        arch: [amd64, arm64]
         include:
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: amd64
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: arm64
-          - os: windows-latest
-            goos: windows
+          - goos: windows
             goarch: amd64
-          - os: windows-latest
-            goos: windows
+          - goos: windows
             goarch: arm64
-          - os: macos-latest
-            goos: darwin
+          - goos: darwin
             goarch: amd64
-          - os: macos-latest
-            goos: darwin
+          - goos: darwin
             goarch: arm64
 
     steps:
