@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kube-manifest-backup.fullname" . }}
+  labels:
+    {{- include "kube-manifest-backup.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "kube-manifest-backup.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- if .Values.global.metrics.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2112"
+        prometheus.io/path: "/metrics"
+      {{- end }}
+      labels:
+        {{- include "kube-manifest-backup.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kube-manifest-backup.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: renku/kube-manifest-backup:{{ .Chart.Version }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: KMB_IN_CLUSTER
+              value: "{{ .Values.global.inCluster }}"
+            - name: KMB_USE_PRIVATE_GPG_KEY
+              value: "{{ .Values.global.privateKey.usePrivateGPGKey }}"
+            - name: KMB_PRIVATE_KEY_SECRET_NAME
+              value: "{{ .Values.global.privateKey.secretName }}"
+            - name: KMB_PRIVATE_KEY_SECRET_NAMESPACE
+              value: "{{ .Values.global.privateKey.secretNamespace }}"
+            - name: KMB_PRIVATE_KEY_SECRET_KEY
+              value: "{{ .Values.global.privateKey.secretKey }}"
+            - name: KMB_BACKUP_SCHEDULE
+              value: "{{ .Values.global.backupSchedule }}"
+            - name: KMB_LOCAL_BACKUP_DIR
+              value: "{{ .Values.global.localBackupDirectory }}"
+            - name: KMB_BACKUP_RESOURCES_YAML_FILE
+              value: "{{ .Values.global.backupResourcesFile }}"
+            - name: KMB_S3_BACKUP_BUCKET_NAME
+              value: "{{ .Values.global.s3.bucketName }}"
+            - name: KMB_S3_CONFIG_FILE
+              value: "{{ .Values.global.s3.configFile }}"
+            - name: KMB_S3_BACKUP_DIR
+              value: "{{ .Values.global.s3.directory }}"
+          {{- if .Values.global.metrics.enabled }}
+          ports:
+            - name: metrics
+              containerPort: 2112
+          {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          - name: resources-configmap
+            mountPath: /app/resources.yaml
+            subPath: resources.yaml
+          - name: s3-config-secret
+            mountPath: /app/s3-config.json
+            subPath: s3-config.json
+      volumes:
+      - name: resources-configmap
+        configMap:
+          name: {{ include "kube-manifest-backup.fullname" . }}-resources-configmap
+      - name: s3-config-secret
+        secret:
+          secretName: {{ include "kube-manifest-backup.fullname" . }}-s3-config-secret
+      nodeSelector:
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
