@@ -71,19 +71,19 @@ type s3Config struct {
 }
 
 func main() {
-	// Parse command line flags
-	usePrivateGPGKey := flag.Bool("use-private-gpg-key", false, "use a private GPG key to encrypt backups")
-	privateKeySecretName := flag.String("private-key-secret-name", "sops-gpg", "name of the secret containing the private key")
-	privateKeySecretNamespace := flag.String("private-key-secret-namespace", "flux-system", "namespace of the secret containing the private key")
-	privateKeySecretKey := flag.String("private-key-secret-key", "sops.asc", "key in the secret containing the private key")
-	backupSchedule := flag.String("backup-schedule", "1/1 * * * *", "cron schedule for backups")
-	localBackupDir := flag.String("local-backup-dir", "backups", "local directory to store backups")
-	runOnce := flag.Bool("run-once", false, "run a single backup and exit")
-	inCluster := flag.Bool("in-cluster", false, "use in-cluster config")
-	backupResourcesYamlFile := flag.String("backup-resources-yaml-file", "resources.yaml", "YAML file containing resources to backup")
-	s3ConfigFile := flag.String("s3-config-file", "s3-config.json", "S3 configuration file")
-	s3BucketName := flag.String("s3-bucket-name", "etcd-backup-test-wes", "S3 bucket name")
-	s3BackupDir := flag.String("s3-backup-dir", "target-directory", "S3 backup directory")
+	// Parse command line flags, and environment variables
+	usePrivateGPGKey := flag.Bool("use-private-gpg-key", getEnv("KMB_USE_PRIVATE_GPG_KEY", "false") == "true", "use a private GPG key to encrypt backups")
+	privateKeySecretName := flag.String("private-key-secret-name", getEnv("KMB_PRIVATE_KEY_SECRET_NAME", "sops-gpg"), "name of the secret containing the private key")
+	privateKeySecretNamespace := flag.String("private-key-secret-namespace", getEnv("KMB_PRIVATE_KEY_SECRET_NAMESPACE", "flux-system"), "namespace of the secret containing the private key")
+	privateKeySecretKey := flag.String("private-key-secret-key", getEnv("KMB_PRIVATE_KEY_SECRET_KEY", "sops.asc"), "key in the secret containing the private key")
+	backupSchedule := flag.String("backup-schedule", getEnv("KMB_BACKUP_SCHEDULE", "1/1 * * * *"), "cron schedule for backups")
+	localBackupDir := flag.String("local-backup-dir", getEnv("KMB_LOCAL_BACKUP_DIR", "backups"), "local directory to store backups")
+	runOnce := flag.Bool("run-once", getEnv("KMB_RUN_ONCE", "false") == "true", "run a single backup and exit")
+	inCluster := flag.Bool("in-cluster", getEnv("KMB_IN_CLUSTER", "false") == "true", "use in-cluster config")
+	backupResourcesYamlFile := flag.String("backup-resources-yaml-file", getEnv("KMB_BACKUP_RESOURCES_YAML_FILE", "resources.yaml"), "YAML file containing resources to backup")
+	s3ConfigFile := flag.String("s3-config-file", getEnv("KMB_S3_CONFIG_FILE", "s3-config.json"), "S3 configuration file")
+	s3BucketName := flag.String("s3-bucket-name", getEnv("KMB_S3_BUCKET_NAME", "kube-manifest-backup"), "S3 bucket name")
+	s3BackupDir := flag.String("s3-backup-dir", getEnv("KMB_S3_BACKUP_DIR", "target-directory"), "S3 backup directory")
 
 	var config *rest.Config
 	var err error
@@ -103,11 +103,23 @@ func main() {
 		} else {
 			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 		}
+
+		// Check if the KUBECONFIG environment variable is set
+		if envKubeConfig, exists := os.LookupEnv("KUBECONFIG"); exists {
+			*kubeconfig = envKubeConfig
+		}
+
 		flag.Parse()
 
 		// Check if the KUBECONFIG environment variable is set
 		if envKubeConfig, exists := os.LookupEnv("KUBECONFIG"); exists && *kubeconfig == "" {
 			*kubeconfig = envKubeConfig
+		}
+
+		// Check if the kubeconfig file exists
+		if _, err := os.Stat(*kubeconfig); os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "kubeconfig file does not exist: %s\n", *kubeconfig)
+			os.Exit(1)
 		}
 
 		// Use the current context in kubeconfig
@@ -497,4 +509,14 @@ func encryptYAML(data []byte, privateKey string) ([]byte, error) {
 	}
 
 	return armoredBuf.Bytes(), nil
+}
+
+// Helper function to get environment variable or default value
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		log.Printf("Environment variable %s found with value %s", key, value)
+		return value
+	}
+	log.Printf("CLI flag and/or environment variable %s not set, using default value %s", key, defaultValue)
+	return defaultValue
 }
