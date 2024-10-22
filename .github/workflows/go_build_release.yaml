@@ -1,0 +1,76 @@
+name: Go Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Release on ${{ matrix.os }} for ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        arch: [amd64, arm64]
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+          - os: windows-latest
+            goos: windows
+            goarch: arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Run tests
+        run: go test
+        shell: bash
+
+      - name: Set up QEMU
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v1
+
+      - name: Build
+        run: |
+          env GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o kube-manifest-backup-${{ matrix.goos }}-${{ matrix.goarch }} main.go
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: kube-manifest-backup-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: kube-manifest-backup-${{ matrix.goos }}-${{ matrix.goarch }}
+
+      - name: Create Release
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.arch == 'amd64' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            kube-manifest-backup-linux-amd64
+            kube-manifest-backup-windows-amd64
+            kube-manifest-backup-darwin-amd64
+            kube-manifest-backup-linux-arm64
+            kube-manifest-backup-windows-arm64
+            kube-manifest-backup-darwin-arm64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
