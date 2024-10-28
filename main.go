@@ -319,13 +319,13 @@ func getResourceYAML(dynamicClient dynamic.Interface, namespace *string, resourc
 		resources, err = dynamicClient.Resource(gvr).Namespace(*namespace).List(context.TODO(), metav1.ListOptions{})
 	}
 	if err != nil {
-		log.Printf("error getting %s: %v\n", resourceType, err)
+		log.Printf("Error getting %s: %v\n", resourceType, err)
 		os.Exit(1)
 	}
 
 	err = os.MkdirAll(fmt.Sprintf("%s/%s", localBackupDir, resourceType), 0755)
 	if err != nil {
-		log.Printf("error creating directory: %v\n", err)
+		log.Printf("Error creating directory: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -337,7 +337,7 @@ func getResourceYAML(dynamicClient dynamic.Interface, namespace *string, resourc
 		resource := items.Index(i).Addr().Interface().(*unstructured.Unstructured)
 		yamlData, err := toYAML(resource)
 		if err != nil {
-			log.Printf("error serialising %s to YAML: %v\n", resourceType, err)
+			log.Printf("Error serialising %s to YAML: %v\n", resourceType, err)
 			continue
 		}
 
@@ -359,7 +359,7 @@ func getResourceYAML(dynamicClient dynamic.Interface, namespace *string, resourc
 		resourceName := resource.GetName()
 		fileName := fmt.Sprintf("%s/%s/%s.yaml", localBackupDir, resourceType, resourceName)
 		if err := os.WriteFile(fileName, fileData, 0644); err != nil {
-			log.Printf("error writing YAML to file for %s: %v\n", resourceName, err)
+			log.Printf("Error writing YAML to file for %s: %v\n", resourceName, err)
 			continue
 		}
 		writtenFiles[fileName] = true
@@ -373,7 +373,7 @@ func getResourceYAML(dynamicClient dynamic.Interface, namespace *string, resourc
 
 	files, err := os.ReadDir(fmt.Sprintf("%s/%s", localBackupDir, resourceType))
 	if err != nil {
-		log.Printf("error reading '%s/%s' directory: %v\n", localBackupDir, resourceType, err)
+		log.Printf("Error reading '%s/%s' directory: %v\n", localBackupDir, resourceType, err)
 		return
 	}
 
@@ -382,7 +382,7 @@ func getResourceYAML(dynamicClient dynamic.Interface, namespace *string, resourc
 		if !writtenFiles[filePath] {
 			err := os.Remove(filePath)
 			if err != nil {
-				log.Printf("error removing old file %s: %v\n", file.Name(), err)
+				log.Printf("Error removing old file %s: %v\n", file.Name(), err)
 				continue
 			}
 			log.Printf("Removed old file %s\n", file.Name())
@@ -409,19 +409,19 @@ func scheduleBackups(backupSchedule string, dynamicClient dynamic.Interface, loc
 	s := gocron.NewScheduler(time.UTC)
 	job, err := s.Cron(backupSchedule).Do(performBackup, dynamicClient, localBackupDir, kmbMetrics, privateKey, backupResourcesYamlFile, s3Configuration)
 	if err != nil {
-		log.Fatalf("error creating job: %v", err)
+		log.Fatalf("Error creating job: %v", err)
 	}
 	s.StartAsync()
-	log.Printf("first backup scheduled: %v, backup schedule: %v", job.NextRun(), backupSchedule)
+	log.Printf("First backup scheduled: %v, backup schedule: %v", job.NextRun(), backupSchedule)
 
 }
 
 func performBackup(dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string, s3Configuration s3Config) {
-	log.Printf("starting backup\n")
+	log.Printf("Starting backup\n")
 
 	backupResources(dynamicClient, localBackupDir, kmbMetrics, privateKey, backupResourcesYamlFile, s3Configuration)
 
-	log.Printf("backup complete\n---\n")
+	log.Printf("Backup complete\n---\n")
 }
 
 // Initialise Prometheus metrics
