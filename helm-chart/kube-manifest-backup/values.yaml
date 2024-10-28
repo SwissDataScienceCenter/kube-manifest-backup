@@ -51,12 +51,12 @@ resources: {}
 
 livenessProbe:
   httpGet:
-    path: /
-    port: metrics
+    path: /metrics
+    port: 2112
 readinessProbe:
   httpGet:
-    path: /
-    port: metrics
+    path: /metrics
+    port: 2112
 
 # Additional volumes on the output Deployment definition.
 volumes: []
