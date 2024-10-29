@@ -52,7 +52,7 @@ spec:
               value: "{{ .Values.global.localBackupDirectory }}"
             - name: KMB_BACKUP_RESOURCES_YAML_FILE
               value: "{{ .Values.global.backupResourcesFile }}"
-            - name: KMB_S3_BACKUP_BUCKET_NAME
+            - name: KMB_S3_BUCKET_NAME
               value: "{{ .Values.global.s3.bucketName }}"
             - name: KMB_S3_CONFIG_FILE
               value: "{{ .Values.global.s3.configFile }}"
