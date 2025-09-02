@@ -90,36 +90,70 @@ global:
   # Backup schedule
   backupSchedule: "1/1 * * * *"
 
-  # Local backup directory where the manifest files will be saved before being synced with S3
+  # Local backup directory where the manifest files will be saved before being synced to storage
   localBackupDirectory: "backups"
 
   # YAML file listing the resources to backup
   backupResourcesFile: "resources.yaml"
 
+  # Storage backend configuration for any rclone-supported provider
+  # Container/bucket name where the backups will be stored
+  bucketName: "my-bucket"
+  
+  # JSON file containing the Rclone-based storage configuration
+  configFile: "storage-config.json"
+  
+  # Directory in the storage backend where the backups will be stored
+  directory: "backups"
+
+  # Storage Backend Configuration - configure for any rclone-supported backend
+  # Only configure ONE backend section below based on your storage provider
+  
+  # S3-compatible storage (AWS S3, MinIO, etc.)
   s3:
-    # S3 bucket name where the backups will be stored
-    bucketName: "my-bucket"
-    # JSON file containing the Rclone-based S3 configuration
-    configFile: "s3-config.json"
-    # Directory in the S3 bucket where the backups will be stored
-    directory: "backups"
-    # Configuration items in Rclone format
-    config:
-      type: "s3"
-      provider: "Other"
-      env_auth: "false"
-      access_key_id: "my-access-key"
-      secret_access_key: "my-secret-key"
-      region: "ZH"
-      endpoint: "https://os.zhdk.cloud.switch.ch"
-      chunk_size: "5Mi"
-      copy_cutoff: "4.656Gi"
-      list_version: "2"
-      force_path_style: "true"
-      list_url_encode: "false"
-      use_multipart_uploads: "false"
-      use_already_exists: "false"
-      list_chunk: "1000"
+    type: "s3"
+    provider: "Other"
+    env_auth: "false"
+    access_key_id: "my-access-key"
+    secret_access_key: "my-secret-key"
+    region: "ZH"
+    endpoint: "https://os.zhdk.cloud.switch.ch"
+    chunk_size: "5Mi"
+    copy_cutoff: "4.656Gi"
+    list_version: "2"
+    force_path_style: "true"
+    list_url_encode: "false"
+    use_multipart_uploads: "false"
+    use_already_exists: "false"
+    list_chunk: "1000"
+
+  # Azure Blob Storage - uncomment and configure to use Azure as backend
+  # azure:
+  #   type: "azureblob"
+  #   account: "mystorageaccount"
+  #   key: "my-storage-account-key"
+  #   # Alternative authentication methods:
+  #   # sas_url: "https://mystorageaccount.blob.core.windows.net/container?sp=racwdl&st=..."
+  #   # use_msi: "true"  # For managed service identity
+  #   # client_id: "client-id-for-service-principal"
+  #   # client_secret: "client-secret-for-service-principal"
+  #   # tenant: "tenant-id"
+  #   endpoint: ""  # Optional: custom endpoint URL
+  #   chunk_size: "4Mi"
+  #   upload_cutoff: "200Mi"
+  #   list_version: "2"
+
+  # Google Cloud Storage - uncomment and configure to use GCS as backend  
+  # gcs:
+  #   type: "googlecloudstorage"
+  #   service_account_file: "/path/to/service-account.json"
+  #   project_number: "your-project-number"
+  #   chunk_size: "5Mi"
+  #   copy_cutoff: "4.656Gi"
+
+  # For other backends (Dropbox, OneDrive, BackBlaze B2, etc.), 
+  # create a custom section with appropriate rclone config parameters
+  # See https://rclone.org/ for backend-specific configuration options
 
   backupResources:
     - namespaces:

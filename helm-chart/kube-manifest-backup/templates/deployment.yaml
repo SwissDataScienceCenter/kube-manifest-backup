@@ -53,11 +53,11 @@ spec:
             - name: KMB_BACKUP_RESOURCES_YAML_FILE
               value: "{{ .Values.global.backupResourcesFile }}"
             - name: KMB_S3_BUCKET_NAME
-              value: "{{ .Values.global.s3.bucketName }}"
+              value: "{{ .Values.global.bucketName }}"
             - name: KMB_S3_CONFIG_FILE
-              value: "{{ .Values.global.s3.configFile }}"
+              value: "{{ .Values.global.configFile }}"
             - name: KMB_S3_BACKUP_DIR
-              value: "{{ .Values.global.s3.directory }}"
+              value: "{{ .Values.global.directory }}"
           {{- if .Values.global.metrics.enabled }}
           ports:
             - name: metrics
@@ -73,16 +73,16 @@ spec:
           - name: resources-configmap
             mountPath: /app/resources.yaml
             subPath: resources.yaml
-          - name: s3-config-secret
-            mountPath: /app/s3-config.json
-            subPath: s3-config.json
+          - name: storage-config-secret
+            mountPath: /app/storage-config.json
+            subPath: storage-config.json
       volumes:
       - name: resources-configmap
         configMap:
           name: {{ include "kube-manifest-backup.fullname" . }}-resources-configmap
-      - name: s3-config-secret
+      - name: storage-config-secret
         secret:
-          secretName: {{ include "kube-manifest-backup.fullname" . }}-s3-config-secret
+          secretName: {{ include "kube-manifest-backup.fullname" . }}-storage-config-secret
       nodeSelector:
       {{- with .Values.affinity }}
       affinity:

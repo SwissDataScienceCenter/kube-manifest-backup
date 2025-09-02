@@ -37,8 +37,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
-	"github.com/rclone/rclone/backend/local"
-	"github.com/rclone/rclone/backend/s3"
+	_ "github.com/rclone/rclone/backend/all"
 )
 
 type kmbmetrics struct {
@@ -225,16 +224,27 @@ func setupFilesystems(ctx context.Context, localBackupDir string, s3Configuratio
 		m.Set(key, value)
 	}
 
-	l := configmap.Simple{}
-	l.Set("type", "local")
+	// Get the storage type from config (e.g., "s3", "azureblob", etc.)
+	storageType, ok := m.Get("type")
+	if !ok || storageType == "" {
+		log.Fatalf("Storage type not specified in config")
+	}
 
-	fdest, err := s3.NewFs(ctx, "myS3", s3Configuration.BucketName+"/"+s3Configuration.BackupDir+"/", m)
+	// Get the registered filesystem for this type
+	fsInfo, err := fs.Find(storageType)
 	if err != nil {
-		log.Fatalf("Failed to create filesystem for destination using alias: %v", err)
+		log.Fatalf("Failed to find filesystem type %s: %v", storageType, err)
+	}
+
+	// Create filesystem using the registered constructor
+	remotePath := s3Configuration.BucketName + "/" + s3Configuration.BackupDir + "/"
+	fdest, err := fsInfo.NewFs(ctx, "remote", remotePath, m)
+	if err != nil {
+		log.Fatalf("Failed to create filesystem for destination: %v", err)
 	}
 
 	log.Println("Creating local filesystem for source")
-	fsrc, err := local.NewFs(ctx, "myLocal", localBackupDir+"/", l)
+	fsrc, err := fs.NewFs(ctx, localBackupDir+"/")
 	if err != nil {
 		log.Fatalf("Failed to create filesystem for source: %v", err)
 	}
