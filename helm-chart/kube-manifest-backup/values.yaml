@@ -109,23 +109,23 @@ global:
   # Storage Backend Configuration - configure for any rclone-supported backend
   # Only configure ONE backend section below based on your storage provider
   
-  # S3-compatible storage (AWS S3, MinIO, etc.)
-  s3:
-    type: "s3"
-    provider: "Other"
-    env_auth: "false"
-    access_key_id: "my-access-key"
-    secret_access_key: "my-secret-key"
-    region: "ZH"
-    endpoint: "https://os.zhdk.cloud.switch.ch"
-    chunk_size: "5Mi"
-    copy_cutoff: "4.656Gi"
-    list_version: "2"
-    force_path_style: "true"
-    list_url_encode: "false"
-    use_multipart_uploads: "false"
-    use_already_exists: "false"
-    list_chunk: "1000"
+  # S3-compatible storage (AWS S3, MinIO, etc.) - uncomment and configure to use S3 as backend
+  # s3:
+  #   type: "s3"
+  #   provider: "Other"
+  #   env_auth: "false"
+  #   access_key_id: "my-access-key"
+  #   secret_access_key: "my-secret-key"
+  #   region: "ZH"
+  #   endpoint: "https://os.zhdk.cloud.switch.ch"
+  #   chunk_size: "5Mi"
+  #   copy_cutoff: "4.656Gi"
+  #   list_version: "2"
+  #   force_path_style: "true"
+  #   list_url_encode: "false"
+  #   use_multipart_uploads: "false"
+  #   use_already_exists: "false"
+  #   list_chunk: "1000"
 
   # Azure Blob Storage - uncomment and configure to use Azure as backend
   # azure:
