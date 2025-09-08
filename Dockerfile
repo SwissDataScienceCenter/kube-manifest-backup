@@ -5,9 +5,9 @@ COPY . .
 ARG TARGETPLATFORM
 
 RUN echo "Building for $TARGETPLATFORM" && \
-    GOOS=$(echo $TARGETPLATFORM | cut -d '/' -f1) \
-    GOARCH=$(echo $TARGETPLATFORM | cut -d '/' -f2) \
-    go build -o /out/kube-manifest-backup .
+  GOOS=$(echo $TARGETPLATFORM | cut -d '/' -f1) \
+  GOARCH=$(echo $TARGETPLATFORM | cut -d '/' -f2) \
+  go build -o /out/kube-manifest-backup .
 
 FROM alpine:3.17.2 AS bin
 WORKDIR /app
@@ -22,9 +22,9 @@ ENV KMB_LOCAL_BACKUP_DIR="backups"
 ENV KMB_RUN_ONCE="false"
 ENV KMB_IN_CLUSTER="false"
 ENV KMB_BACKUP_RESOURCES_YAML_FILE="resources.yaml"
-ENV KMB_S3_CONFIG_FILE="s3-config.json"
-ENV KMB_S3_BUCKET_NAME="kube-manifest-backup"
-ENV KMB_S3_BACKUP_DIR="backups"
+ENV KMB_CONFIG_FILE="config.json"
+ENV KMB_BUCKET_NAME="kube-manifest-backup"
+ENV KMB_BACKUP_DIR="backups"
 
 EXPOSE 2112/tcp
 

@@ -1,10 +1,10 @@
 # kube-manifest-backup
 
-`kube-manifest-backup` is a Go-based tool designed to back up Kubernetes YAML manifest files to an S3 bucket.
+`kube-manifest-backup` is a Go-based tool designed to back up Kubernetes YAML manifest files to cloud storage backends supported by rclone (S3, Azure Blob Storage, Google Cloud Storage, and many others).
 
 ## Features
 
-- Backup Kubernetes YAML manifest files to an S3 bucket.
+- Backup Kubernetes YAML manifest files to multiple cloud storage backends via rclone (S3, Azure Blob Storage, Google Cloud Storage, and 40+ others).
 - Cron-based scheduling.
 - Support for backing up secrets, encrypted with an in-cluster GPG key.
 - Export Prometheus metrics
@@ -31,7 +31,7 @@ Otherwise, `kube-manifest-backup` can be configured using command-line flags or 
 The following command-line flags and environment variables can be used to configure the tool:
 
 | CLI Flag                         | Environment Variable               | Default Value          | Description                                        |
-|----------------------------------|------------------------------------|------------------------|----------------------------------------------------|
+| -------------------------------- | ---------------------------------- | ---------------------- | -------------------------------------------------- |
 | `--use-private-gpg-key`          | `KMB_USE_PRIVATE_GPG_KEY`          | `false`                | use a private GPG key to encrypt backups           |
 | `--private-key-secret-name`      | `KMB_PRIVATE_KEY_SECRET_NAME`      | `sops-gpg`             | name of the secret containing the private key      |
 | `--private-key-secret-namespace` | `KMB_PRIVATE_KEY_SECRET_NAMESPACE` | `flux-system`          | namespace of the secret containing the private key |
@@ -41,9 +41,9 @@ The following command-line flags and environment variables can be used to config
 | `--run-once`                     | `KMB_RUN_ONCE`                     | `false`                | run a single backup and exit                       |
 | `--in-cluster`                   | `KMB_IN_CLUSTER`                   | `false`                | use in-cluster config                              |
 | `--backup-resources-yaml-file`   | `KMB_BACKUP_RESOURCES_YAML_FILE`   | `resources.yaml`       | YAML file containing resources to backup           |
-| `--s3-config-file`               | `KMB_S3_CONFIG_FILE`               | `s3-config.json`       | S3 configuration file                              |
-| `--s3-bucket-name`               | `KMB_S3_BUCKET_NAME`               | `kube-manifest-backup` | S3 bucket name                                     |
-| `--s3-backup-dir`                | `KMB_S3_BACKUP_DIR`                | `target-directory`     | S3 backup directory                                |
+| `--config-file`                  | `KMB_CONFIG_FILE`                  | `config.json`          | Storage backend configuration file                 |
+| `--bucket-name`                  | `KMB_BUCKET_NAME`                  | `kube-manifest-backup` | Storage bucket/container name                      |
+| `--backup-dir`                   | `KMB_BACKUP_DIR`                   | `target-directory`     | Storage backup directory                           |
 
 ### `resources.yaml`
 
@@ -73,29 +73,60 @@ resources:
     secret: true
 ```
 
-### s3-config.json
+### Storage Backend Configuration
 
-Configure the S3 connection using [Rclone config parameters](https://rclone.org/s3/#standard-options). Example:
+Configure your storage backend connection using [Rclone config parameters](https://rclone.org/). The tool supports all rclone backends by specifying the appropriate `type` and configuration parameters.
+
+#### S3 Example:
 
 ```json
 {
-    "type": "s3",
-    "provider": "Other",
-    "access_key_id": "******",
-    "secret_access_key": "******",
-    "region": "ZH",
-    "endpoint": "https://os.zhdk.cloud.switch.ch",
-    "env_auth": "false",
-    "chunk_size": "5Mi",
-    "copy_cutoff": "4.656Gi",
-    "list_version": "2",
-    "force_path_style": "true",
-    "list_url_encode": "false",
-    "use_multipart_uploads": "false",
-    "use_already_exists": "false",
-    "list_chunk": "1000"
+  "type": "s3",
+  "provider": "Other",
+  "access_key_id": "******",
+  "secret_access_key": "******",
+  "region": "ZH",
+  "endpoint": "https://os.zhdk.cloud.switch.ch",
+  "env_auth": "false",
+  "chunk_size": "5Mi",
+  "copy_cutoff": "4.656Gi",
+  "list_version": "2",
+  "force_path_style": "true",
+  "list_url_encode": "false",
+  "use_multipart_uploads": "false",
+  "use_already_exists": "false",
+  "list_chunk": "1000"
 }
 ```
+
+#### Azure Blob Storage Example:
+
+```json
+{
+  "type": "azureblob",
+  "account": "your-storage-account",
+  "key": "your-storage-key",
+  "chunk_size": "5Mi",
+  "copy_cutoff": "4.656Gi",
+  "use_multipart_uploads": "false",
+  "use_already_exists": "false",
+  "list_chunk": "1000"
+}
+```
+
+#### Google Cloud Storage Example:
+
+```json
+{
+  "type": "googlecloudstorage",
+  "service_account_file": "/path/to/service-account.json",
+  "project_number": "your-project-number",
+  "chunk_size": "5Mi",
+  "copy_cutoff": "4.656Gi"
+}
+```
+
+See the [Rclone documentation](https://rclone.org/#providers) for configuration parameters for other supported backends including Dropbox, OneDrive, BackBlaze B2, and many others.
 
 ## Contributing
 

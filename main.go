@@ -37,8 +37,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
-	"github.com/rclone/rclone/backend/local"
-	"github.com/rclone/rclone/backend/s3"
+	_ "github.com/rclone/rclone/backend/all"
 )
 
 type kmbmetrics struct {
@@ -64,7 +63,7 @@ type resourceinfo struct {
 	Secret    bool
 }
 
-type s3Config struct {
+type rcloneConfig struct {
 	ConfigFile string
 	BucketName string
 	BackupDir  string
@@ -81,9 +80,9 @@ func main() {
 	runOnce := flag.Bool("run-once", getEnv("KMB_RUN_ONCE", "false") == "true", "run a single backup and exit")
 	inCluster := flag.Bool("in-cluster", getEnv("KMB_IN_CLUSTER", "false") == "true", "use in-cluster config")
 	backupResourcesYamlFile := flag.String("backup-resources-yaml-file", getEnv("KMB_BACKUP_RESOURCES_YAML_FILE", "resources.yaml"), "YAML file containing resources to backup")
-	s3ConfigFile := flag.String("s3-config-file", getEnv("KMB_S3_CONFIG_FILE", "s3-config.json"), "S3 configuration file")
-	s3BucketName := flag.String("s3-bucket-name", getEnv("KMB_S3_BUCKET_NAME", "kube-manifest-backup"), "S3 bucket name")
-	s3BackupDir := flag.String("s3-backup-dir", getEnv("KMB_S3_BACKUP_DIR", "target-directory"), "S3 backup directory")
+	rcloneConfigFile := flag.String("config-file", getEnv("KMB_CONFIG_FILE", "config.json"), "Rclone configuration file")
+	rcloneBucketName := flag.String("bucket-name", getEnv("KMB_BUCKET_NAME", "kube-manifest-backup"), "Bucket name")
+	rcloneBackupDir := flag.String("backup-dir", getEnv("KMB_BACKUP_DIR", "target-directory"), "Backup directory")
 
 	var config *rest.Config
 	var err error
@@ -155,35 +154,35 @@ func main() {
 		}
 	}
 
-	var s3configuration s3Config
-	s3configuration.ConfigFile = *s3ConfigFile
-	s3configuration.BucketName = *s3BucketName
-	s3configuration.BackupDir = *s3BackupDir
+	var rcloneConfiguration rcloneConfig
+	rcloneConfiguration.ConfigFile = *rcloneConfigFile
+	rcloneConfiguration.BucketName = *rcloneBucketName
+	rcloneConfiguration.BackupDir = *rcloneBackupDir
 
 	// If singleBackup flag is set, run a single backup and exit
 	if *runOnce {
-		backupResources(dynamicClient, *localBackupDir, nil, privateKey, *backupResourcesYamlFile, s3configuration)
+		backupResources(dynamicClient, *localBackupDir, nil, privateKey, *backupResourcesYamlFile, rcloneConfiguration)
 		os.Exit(0)
 	}
 
 	// Else, initialise Prometheus metrics and schedule backups
 	kmbMetrics := initialiseMetrics()
 
-	scheduleBackups(*backupSchedule, dynamicClient, *localBackupDir, &kmbMetrics, privateKey, *backupResourcesYamlFile, s3configuration)
+	scheduleBackups(*backupSchedule, dynamicClient, *localBackupDir, &kmbMetrics, privateKey, *backupResourcesYamlFile, rcloneConfiguration)
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(":2112", nil)
 }
 
-func backupResources(dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string, s3Configuration s3Config) {
+func backupResources(dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string, rcloneConfiguration rcloneConfig) {
 	resources := processResources(dynamicClient, localBackupDir, kmbMetrics, privateKey, backupResourcesYamlFile)
 	cleanupOldBackupDirectories(localBackupDir, resources)
 
 	ctx := context.Background()
 	configfile.Install()
 
-	s3config := loadS3Config(s3Configuration.ConfigFile)
-	fdest, fsrc := setupFilesystems(ctx, localBackupDir, s3Configuration, s3config)
+	rcloneConfig := loadRcloneConfig(rcloneConfiguration.ConfigFile)
+	fdest, fsrc := setupFilesystems(ctx, localBackupDir, rcloneConfiguration, rcloneConfig)
 
 	performSync(ctx, fdest, fsrc)
 }
@@ -203,38 +202,49 @@ func processResources(dynamicClient dynamic.Interface, localBackupDir string, km
 	return resources
 }
 
-func loadS3Config(configFile string) map[string]string {
+func loadRcloneConfig(configFile string) map[string]string {
 	file, err := os.Open(configFile)
 	if err != nil {
-		log.Println("Error opening S3 config file:", err)
+		log.Println("Error opening  config file:", err)
 		return nil
 	}
 	defer file.Close()
 
 	byteValue, _ := io.ReadAll(file)
 
-	var s3config map[string]string
-	encodingjson.Unmarshal(byteValue, &s3config)
+	var rcloneConfig map[string]string
+	encodingjson.Unmarshal(byteValue, &rcloneConfig)
 
-	return s3config
+	return rcloneConfig
 }
 
-func setupFilesystems(ctx context.Context, localBackupDir string, s3Configuration s3Config, s3config map[string]string) (fs.Fs, fs.Fs) {
+func setupFilesystems(ctx context.Context, localBackupDir string, rcloneConfiguration rcloneConfig, rcloneConfig map[string]string) (fs.Fs, fs.Fs) {
 	m := configmap.Simple{}
-	for key, value := range s3config {
+	for key, value := range rcloneConfig {
 		m.Set(key, value)
 	}
 
-	l := configmap.Simple{}
-	l.Set("type", "local")
+	// Get the storage type from config (e.g., "", "azureblob", etc.)
+	storageType, ok := m.Get("type")
+	if !ok || storageType == "" {
+		log.Fatalf("Storage type not specified in config")
+	}
 
-	fdest, err := s3.NewFs(ctx, "myS3", s3Configuration.BucketName+"/"+s3Configuration.BackupDir+"/", m)
+	// Get the registered filesystem for this type
+	fsInfo, err := fs.Find(storageType)
 	if err != nil {
-		log.Fatalf("Failed to create filesystem for destination using alias: %v", err)
+		log.Fatalf("Failed to find filesystem type %s: %v", storageType, err)
+	}
+
+	// Create filesystem using the registered constructor
+	remotePath := rcloneConfiguration.BucketName + "/" + rcloneConfiguration.BackupDir + "/"
+	fdest, err := fsInfo.NewFs(ctx, "remote", remotePath, m)
+	if err != nil {
+		log.Fatalf("Failed to create filesystem for destination: %v", err)
 	}
 
 	log.Println("Creating local filesystem for source")
-	fsrc, err := local.NewFs(ctx, "myLocal", localBackupDir+"/", l)
+	fsrc, err := fs.NewFs(ctx, localBackupDir+"/")
 	if err != nil {
 		log.Fatalf("Failed to create filesystem for source: %v", err)
 	}
@@ -403,11 +413,11 @@ func toYAML(obj runtime.Object) (string, error) {
 	return sb.String(), nil
 }
 
-func scheduleBackups(backupSchedule string, dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string, s3Configuration s3Config) {
+func scheduleBackups(backupSchedule string, dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string, rcloneConfiguration rcloneConfig) {
 
 	// schedule backups
 	s := gocron.NewScheduler(time.UTC)
-	job, err := s.Cron(backupSchedule).Do(performBackup, dynamicClient, localBackupDir, kmbMetrics, privateKey, backupResourcesYamlFile, s3Configuration)
+	job, err := s.Cron(backupSchedule).Do(performBackup, dynamicClient, localBackupDir, kmbMetrics, privateKey, backupResourcesYamlFile, rcloneConfiguration)
 	if err != nil {
 		log.Fatalf("Error creating job: %v", err)
 	}
@@ -416,10 +426,10 @@ func scheduleBackups(backupSchedule string, dynamicClient dynamic.Interface, loc
 
 }
 
-func performBackup(dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string, s3Configuration s3Config) {
+func performBackup(dynamicClient dynamic.Interface, localBackupDir string, kmbMetrics *kmbmetrics, privateKey string, backupResourcesYamlFile string, rcloneConfiguration rcloneConfig) {
 	log.Printf("Starting backup\n")
 
-	backupResources(dynamicClient, localBackupDir, kmbMetrics, privateKey, backupResourcesYamlFile, s3Configuration)
+	backupResources(dynamicClient, localBackupDir, kmbMetrics, privateKey, backupResourcesYamlFile, rcloneConfiguration)
 
 	log.Printf("Backup complete\n---\n")
 }
